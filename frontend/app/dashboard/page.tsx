@@ -264,7 +264,11 @@ export default function DashboardPage() {
                 </Link>
               </div>
 
-              {roleList.length === 0 ? (
+              {loading ? (
+                <div className="card p-6 flex items-center justify-center" style={{ color: "var(--text-muted)" }}>
+                  <Loader2 size={16} className="animate-spin mr-2" /> Loading roles...
+                </div>
+              ) : loading ? (
                 <div className="card p-6 flex items-center justify-center" style={{ color: "var(--text-muted)" }}>
                   <Loader2 size={16} className="animate-spin mr-2" /> Loading roles…
                 </div>
@@ -527,3 +531,5 @@ export default function DashboardPage() {
     </div>
   );
 }
+
+
