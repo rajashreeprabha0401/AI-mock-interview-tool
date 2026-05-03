@@ -58,13 +58,13 @@ export default function SettingsPage() {
   useEffect(() => {
     const saved = localStorage.getItem("theme") || "dark";
     setTheme(saved);
-    document.documentElement.setAttribute("data-theme", saved);
+    document.documentElement.className = saved === "dark" ? "" : `theme-${saved}`;
   }, []);
 
   const changeTheme = (t: string) => {
     setTheme(t);
     localStorage.setItem("theme", t);
-    document.documentElement.setAttribute("data-theme", t);
+    document.documentElement.className = t === "dark" ? "" : `theme-${t}`;
   };
   // Delete account
   const [deleteConfirm, setDeleteConfirm] = useState("");
@@ -379,4 +379,5 @@ export default function SettingsPage() {
     </div>
   );
 }
+
 
