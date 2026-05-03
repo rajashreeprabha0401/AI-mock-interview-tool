@@ -52,6 +52,20 @@ export default function SettingsPage() {
   const [apiKey, setApiKey] = useState("");
   const [showApiKey, setShowApiKey] = useState(false);
 
+  // Theme
+  const [theme, setTheme] = useState("dark");
+
+  useEffect(() => {
+    const saved = localStorage.getItem("theme") || "dark";
+    setTheme(saved);
+    document.documentElement.setAttribute("data-theme", saved);
+  }, []);
+
+  const changeTheme = (t: string) => {
+    setTheme(t);
+    localStorage.setItem("theme", t);
+    document.documentElement.setAttribute("data-theme", t);
+  };
   // Delete account
   const [deleteConfirm, setDeleteConfirm] = useState("");
   const [deletingAccount, setDeletingAccount] = useState(false);
@@ -187,6 +201,32 @@ export default function SettingsPage() {
                 </button>
               </div>
             </div>
+            {/* Theme */}
+            <div className="card p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <span style={{ fontSize: 16 }}>??</span>
+                <h2 className="text-sm font-bold tracking-wide uppercase" style={{ fontFamily: "'Syne', sans-serif", color: "var(--text-primary)" }}>Theme</h2>
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { id: "dark", label: "Dark", bg: "#0a0f1e", accent: "#00d4ff" },
+                  { id: "light", label: "Light", bg: "#f0f4ff", accent: "#0066cc" },
+                  { id: "midnight", label: "Midnight", bg: "#050510", accent: "#a78bfa" },
+                ].map((t) => (
+                  <button key={t.id} onClick={() => changeTheme(t.id)}
+                    className="p-3 rounded-lg text-xs font-bold transition-all"
+                    style={{
+                      background: t.bg,
+                      color: t.accent,
+                      border: theme === t.id ? `2px solid ${t.accent}` : "2px solid transparent",
+                      fontFamily: "'Syne', sans-serif",
+                    }}>
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
 
             {/* API Key */}
             <div className="card p-6">
@@ -339,3 +379,4 @@ export default function SettingsPage() {
     </div>
   );
 }
+
