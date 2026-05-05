@@ -27,18 +27,7 @@ async function req<T>(path: string, opts: RequestInit = {}): Promise<T> {
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    // FastAPI validation errors return detail as array
-    let msg: string;
-    if (Array.isArray(err.detail)) {
-      msg = err.detail.map((d: any) => d.msg || JSON.stringify(d)).join(", ");
-    } else if (typeof err.detail === "string") {
-      msg = err.detail;
-    } else if (err.message) {
-      msg = err.message;
-    } else {
-      msg = `Request failed (${res.status})`;
-    }
-    throw new Error(msg);
+    throw new Error(err.detail || `Request failed: ${res.status}`);
   }
   return res.json();
 }
@@ -168,11 +157,8 @@ export const interview = {
 export interface RecentInterview {
   interview_id: string;
   role: string;
-  difficulty: string;
   total_questions: number;
-  status: string;
   completed_at: string | null;
-  created_at: string | null;
   overall_score: number | null;
 }
 

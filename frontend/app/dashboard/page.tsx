@@ -156,7 +156,7 @@ export default function DashboardPage() {
     <div className="min-h-screen" style={{ background: "var(--bg-deep)" }}>
       <Sidebar />
 
-      <main className="ml-0 md:ml-[220px] p-8">
+      <main className="lg:ml-[220px] pt-16 lg:pt-0 p-4 sm:p-6 lg:p-8">
         {/* Header */}
         <div className="flex items-start justify-between mb-8 animate-fade-up">
           <div>
@@ -198,7 +198,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           {statCards.map((s, i) => (
             <div
               key={s.label}
@@ -243,7 +243,7 @@ export default function DashboardPage() {
           ))}
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-[1fr_340px] gap-6">
+        <div className="grid grid-cols-[1fr_340px] gap-6">
           {/* Left column */}
           <div className="space-y-6">
             {/* Choose Role */}
@@ -264,12 +264,12 @@ export default function DashboardPage() {
                 </Link>
               </div>
 
-              {loading ? (
+              {roleList.length === 0 ? (
                 <div className="card p-6 flex items-center justify-center" style={{ color: "var(--text-muted)" }}>
                   <Loader2 size={16} className="animate-spin mr-2" /> Loading roles…
                 </div>
               ) : (
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                   {roleList.slice(0, 6).map((role) => (
                     <Link
                       key={role.id}
@@ -527,7 +527,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-
-
-
-

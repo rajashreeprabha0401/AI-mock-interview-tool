@@ -4,17 +4,14 @@ import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import Sidebar from "../components/Sidebar";
 import { interview as interviewApi, InterviewResultsResponse, getUser } from "../../lib/api";
-import {
-  ChevronDown, ChevronUp, TrendingUp, CheckCircle2, AlertCircle,
-  Play, Star, ThumbsUp, Minus, Loader2, Clock, ArrowRight
-} from "lucide-react";
+import { ChevronDown, ChevronUp, TrendingUp, CheckCircle2, AlertCircle, Play, Star, ThumbsUp, Minus, Loader2 } from "lucide-react";
 
-const recConfig: Record<string, { label: string; color: string }> = {
-  strong_yes: { label: "Strong Hire ✅", color: "#10b981" },
-  yes: { label: "Hire ✅", color: "#10b981" },
-  maybe: { label: "Maybe 🤔", color: "#f59e0b" },
-  no: { label: "No Hire ❌", color: "#ef4444" },
-  strong_no: { label: "Strong No Hire ❌", color: "#ef4444" },
+const recommendationConfig: Record<string, { label: string; color: string; icon: React.ElementType }> = {
+  strong_yes: { label: "Strong Hire", color: "var(--accent-green)", icon: ThumbsUp },
+  yes: { label: "Hire", color: "var(--accent-green)", icon: ThumbsUp },
+  maybe: { label: "Maybe", color: "var(--accent-amber)", icon: Minus },
+  no: { label: "No Hire", color: "var(--accent-red)", icon: AlertCircle },
+  strong_no: { label: "Strong No Hire", color: "var(--accent-red)", icon: AlertCircle },
 };
 
 function ScoreBar({ label, value }: { label: string; value: number }) {
@@ -25,129 +22,25 @@ function ScoreBar({ label, value }: { label: string; value: number }) {
         <span style={{ fontFamily: "'Syne', sans-serif", color: "var(--text-primary)", fontWeight: 700 }}>{value.toFixed(1)}</span>
       </div>
       <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "var(--bg-surface)" }}>
-        <div className="h-full rounded-full transition-all" style={{
-          width: `${value * 10}%`,
-          background: value >= 8 ? "#10b981" : value >= 6 ? "var(--accent-cyan)" : "#ef4444"
-        }} />
+        <div className="h-full rounded-full transition-all" style={{ width: `${value * 10}%`, background: value >= 8 ? "var(--accent-green)" : value >= 6 ? "var(--accent-cyan)" : "var(--accent-red)" }} />
       </div>
     </div>
   );
 }
 
-// ── Past Interviews List ────────────────────────────────────
-function PastInterviewsList() {
-  const [stats, setStats] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    interviewApi.getUserStats()
-      .then(setStats)
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, []);
-
-  if (loading) return (
-    <div className="flex items-center justify-center py-24 gap-3" style={{ color: "var(--text-muted)" }}>
-      <Loader2 size={20} className="animate-spin" /> Loading your interviews...
-    </div>
-  );
-
-  const recent = stats?.recent_interviews ?? [];
-
-  return (
-    <div className="max-w-2xl mx-auto">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold mb-1" style={{ fontFamily: "'Syne', sans-serif", color: "var(--text-primary)" }}>
-          Your Results
-        </h1>
-        <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
-          {recent.length > 0 ? `${recent.length} interview${recent.length > 1 ? "s" : ""} found` : "No interviews yet"}
-        </p>
-      </div>
-
-      {recent.length === 0 ? (
-        <div className="card p-12 text-center">
-          <Play size={40} className="mx-auto mb-4" style={{ color: "var(--text-muted)" }} />
-          <p className="text-lg font-bold mb-2" style={{ fontFamily: "'Syne', sans-serif", color: "var(--text-primary)" }}>
-            No interviews yet
-          </p>
-          <p className="text-sm mb-6" style={{ color: "var(--text-muted)" }}>
-            Complete your first interview to see results here
-          </p>
-          <Link href="/interview" className="btn-primary inline-flex items-center gap-2" style={{ textDecoration: "none" }}>
-            <Play size={14} /> Start Interview
-          </Link>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {recent.map((iv: any) => (
-            <Link key={iv.interview_id} href={`/results?id=${iv.interview_id}`} style={{ textDecoration: "none" }}>
-              <div className="card p-5 hover:border-cyan-500/30 transition-all cursor-pointer flex items-center justify-between gap-4"
-                style={{ border: "1px solid var(--border)" }}>
-                <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center text-lg"
-                    style={{ background: "var(--bg-surface)" }}>
-                    {iv.role?.includes("Frontend") || iv.role?.includes("React") ? "⚛️" :
-                      iv.role?.includes("Backend") || iv.role?.includes("Python") ? "🔧" :
-                        iv.role?.includes("Data") ? "🧮" :
-                          iv.role?.includes("Full") ? "🚀" : "💼"}
-                  </div>
-                  <div>
-                    <div className="font-bold text-sm" style={{ fontFamily: "'Syne', sans-serif", color: "var(--text-primary)" }}>
-                      {iv.role}
-                    </div>
-                    <div className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
-                      {iv.total_questions} questions · {iv.created_at ? new Date(iv.created_at).toLocaleDateString("en-IN") : "—"}
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-4">
-                  <span className="flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-full"
-                    style={{
-                      background: iv.status === "completed" ? "rgba(16,185,129,0.1)" : "rgba(0,212,255,0.08)",
-                      color: iv.status === "completed" ? "#10b981" : "var(--accent-cyan)",
-                    }}>
-                    {iv.status === "completed" ? <CheckCircle2 size={11} /> : <Clock size={11} />}
-                    {iv.status === "completed" ? "Completed" : "In Progress"}
-                  </span>
-                  {iv.overall_score != null && (
-                    <div className="text-center">
-                      <div className="text-lg font-bold" style={{
-                        fontFamily: "'Syne', sans-serif",
-                        color: iv.overall_score >= 8 ? "#10b981" : iv.overall_score >= 6 ? "var(--accent-cyan)" : "#ef4444"
-                      }}>
-                        {iv.overall_score?.toFixed(1)}
-                      </div>
-                      <div className="text-[10px]" style={{ color: "var(--text-muted)" }}>score</div>
-                    </div>
-                  )}
-                  <ArrowRight size={16} style={{ color: "var(--text-muted)" }} />
-                </div>
-              </div>
-            </Link>
-          ))}
-          <div className="text-center pt-4">
-            <Link href="/interview" className="btn-primary inline-flex items-center gap-2" style={{ textDecoration: "none" }}>
-              <Play size={14} /> New Interview
-            </Link>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── Single Interview Result ─────────────────────────────────
-function SingleResult({ interviewId }: { interviewId: string }) {
+function ResultsContent() {
+  const params = useSearchParams();
+  const interviewId = params.get("id");
   const [data, setData] = useState<InterviewResultsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [expandedQ, setExpandedQ] = useState<number | null>(0);
 
   useEffect(() => {
+    if (!interviewId) { setError("No interview ID found. Please complete an interview first."); setLoading(false); return; }
     interviewApi.getResults(interviewId)
       .then(setData)
-      .catch((e) => setError(e.message || "Failed to load results"))
+      .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
   }, [interviewId]);
 
@@ -158,195 +51,197 @@ function SingleResult({ interviewId }: { interviewId: string }) {
   );
 
   if (error) return (
-    <div className="max-w-xl mx-auto mt-16 p-6 rounded-xl text-center"
-      style={{ background: "rgba(239,68,68,0.06)", border: "1px solid rgba(239,68,68,0.2)" }}>
-      <p className="mb-4" style={{ color: "#ef4444" }}>⚠️ {error}</p>
-      <Link href="/results" className="btn-primary inline-flex items-center gap-2" style={{ textDecoration: "none" }}>
-        ← Back to Results
+    <div className="max-w-xl mx-auto mt-16 p-6 rounded-xl text-center" style={{ background: "rgba(239,68,68,0.06)", border: "1px solid rgba(239,68,68,0.2)" }}>
+      <p className="mb-4" style={{ color: "var(--accent-red)" }}>⚠️ {error}</p>
+      <Link href="/interview" className="btn-primary inline-flex items-center gap-2" style={{ textDecoration: "none" }}>
+        <Play size={14} /> Start Interview
       </Link>
     </div>
   );
 
   if (!data) return null;
-  const rec = data.hire_recommendation ? recConfig[data.hire_recommendation] : null;
+
+  const isPending = data.overall_score === null;
+  const rec = data.hire_recommendation ? recommendationConfig[data.hire_recommendation] : null;
+
+  const avgRelevance = data.results.filter(r => r.relevance_score !== null).reduce((s, r) => s + (r.relevance_score || 0), 0) / (data.results.filter(r => r.relevance_score !== null).length || 1);
+  const avgClarity = data.results.filter(r => r.clarity_score !== null).reduce((s, r) => s + (r.clarity_score || 0), 0) / (data.results.filter(r => r.clarity_score !== null).length || 1);
+  const avgDepth = data.results.filter(r => r.depth_score !== null).reduce((s, r) => s + (r.depth_score || 0), 0) / (data.results.filter(r => r.depth_score !== null).length || 1);
 
   return (
-    <div className="max-w-3xl mx-auto">
-      <Link href="/results" className="text-xs mb-4 inline-flex items-center gap-1 hover:underline"
-        style={{ color: "var(--text-muted)", textDecoration: "none" }}>
-        ← All Results
-      </Link>
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold" style={{ fontFamily: "'Syne', sans-serif", color: "var(--text-primary)" }}>
-          Interview Results
-        </h1>
-        <p className="text-sm mt-1" style={{ color: "var(--text-secondary)" }}>
-          {data.role} · {data.total_questions} questions · {data.status} ·{" "}
-          {data.completed_at ? new Date(data.completed_at).toLocaleDateString("en-IN") : ""}
-        </p>
-      </div>
-
-      {/* Score + Rec cards */}
-      <div className="grid grid-cols-2 gap-4 mb-6">
-        <div className="card p-6">
-          <div className="text-xs font-bold tracking-wide uppercase mb-3 flex items-center gap-2"
-            style={{ fontFamily: "'Syne', sans-serif", color: "var(--text-muted)" }}>
-            <Star size={13} /> Overall Score
-          </div>
-          {data.overall_score != null ? (
-            <>
-              <div className="text-5xl font-bold mb-1" style={{
-                fontFamily: "'Syne', sans-serif",
-                color: data.overall_score >= 8 ? "#10b981" : data.overall_score >= 6 ? "var(--accent-cyan)" : "#ef4444"
-              }}>
-                {data.overall_score.toFixed(1)}
-              </div>
-              <div className="text-xs" style={{ color: "var(--text-muted)" }}>out of 10</div>
-            </>
-          ) : (
-            <>
-              <div className="text-3xl font-bold" style={{ color: "var(--text-muted)" }}>Pending</div>
-              <div className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>AI evaluation in progress...</div>
-            </>
-          )}
+    <div className="max-w-4xl">
+      {/* Header */}
+      <div className="flex items-start justify-between mb-8 animate-fade-up">
+        <div>
+          <p className="text-sm mb-1" style={{ color: "var(--text-muted)" }}>Interview Results</p>
+          <h1 className="text-3xl font-bold" style={{ fontFamily: "'Syne', sans-serif", color: "var(--text-primary)" }}>{data.role}</h1>
+          <p className="text-sm mt-1" style={{ color: "var(--text-secondary)" }}>
+            {data.total_questions} questions · {data.status}
+            {data.completed_at && ` · ${new Date(data.completed_at).toLocaleDateString()}`}
+          </p>
         </div>
-
-        <div className="card p-6">
-          <div className="text-xs font-bold tracking-wide uppercase mb-3 flex items-center gap-2"
-            style={{ fontFamily: "'Syne', sans-serif", color: "var(--text-muted)" }}>
-            <TrendingUp size={13} /> AI Recommendation
-          </div>
-          {rec ? (
-            <div className="text-xl font-bold" style={{ fontFamily: "'Syne', sans-serif", color: rec.color }}>
-              {rec.label}
-              {data.overall_feedback && (
-                <p className="text-xs font-normal mt-2" style={{ color: "var(--text-secondary)" }}>
-                  {data.overall_feedback}
-                </p>
-              )}
-            </div>
-          ) : (
-            <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-              Evaluation pending after interview completion.
-            </p>
-          )}
-        </div>
-      </div>
-
-      {/* Question Breakdown */}
-      <h2 className="text-lg font-bold mb-4" style={{ fontFamily: "'Syne', sans-serif", color: "var(--text-primary)" }}>
-        Question Breakdown
-      </h2>
-      <div className="space-y-3 mb-6">
-        {data.results.map((r, i) => (
-          <div key={String(r.id)} className="card overflow-hidden">
-            <button className="w-full flex items-start justify-between p-5 text-left"
-              onClick={() => setExpandedQ(expandedQ === i ? null : i)}>
-              <div className="flex items-start gap-3 flex-1 min-w-0">
-                <span className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5"
-                  style={{ background: "var(--bg-surface)", color: "var(--text-muted)" }}>
-                  {i + 1}
-                </span>
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{r.question_text}</p>
-                  <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
-                    {r.score != null ? `Score: ${r.score.toFixed(1)}/10` : "Pending..."}
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3 ml-4 flex-shrink-0">
-                {r.score != null && (
-                  <span className="text-sm font-bold" style={{
-                    color: r.score >= 8 ? "#10b981" : r.score >= 6 ? "var(--accent-cyan)" : "#ef4444"
-                  }}>{r.score.toFixed(1)}</span>
-                )}
-                {expandedQ === i ? <ChevronUp size={16} style={{ color: "var(--text-muted)" }} /> : <ChevronDown size={16} style={{ color: "var(--text-muted)" }} />}
-              </div>
-            </button>
-
-            {expandedQ === i && (
-              <div className="px-5 pb-5 border-t" style={{ borderColor: "var(--border)" }}>
-                <div className="mt-4 mb-4">
-                  <div className="text-xs font-bold uppercase tracking-wide mb-2" style={{ color: "var(--text-muted)" }}>Your Answer</div>
-                  <p className="text-sm p-3 rounded-lg" style={{ background: "var(--bg-surface)", color: "var(--text-secondary)" }}>
-                    {r.answer_text}
-                  </p>
-                </div>
-                {r.score != null && (
-                  <>
-                    <div className="grid grid-cols-3 gap-3 mb-4">
-                      {r.relevance_score != null && <ScoreBar label="Relevance" value={r.relevance_score} />}
-                      {r.clarity_score != null && <ScoreBar label="Clarity" value={r.clarity_score} />}
-                      {r.depth_score != null && <ScoreBar label="Depth" value={r.depth_score} />}
-                    </div>
-                    {r.feedback && (
-                      <div className="mb-3 p-3 rounded-lg" style={{ background: "rgba(0,212,255,0.05)", border: "1px solid rgba(0,212,255,0.1)" }}>
-                        <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{r.feedback}</p>
-                      </div>
-                    )}
-                    {(r.strengths?.length || r.improvements?.length) ? (
-                      <div className="grid grid-cols-2 gap-3">
-                        {r.strengths?.length ? (
-                          <div>
-                            <div className="text-xs font-bold mb-2" style={{ color: "#10b981" }}>✓ Strengths</div>
-                            {r.strengths.map((s, j) => <p key={j} className="text-xs mb-1" style={{ color: "var(--text-secondary)" }}>• {s}</p>)}
-                          </div>
-                        ) : null}
-                        {r.improvements?.length ? (
-                          <div>
-                            <div className="text-xs font-bold mb-2" style={{ color: "#f59e0b" }}>↑ Improvements</div>
-                            {r.improvements.map((s, j) => <p key={j} className="text-xs mb-1" style={{ color: "var(--text-secondary)" }}>• {s}</p>)}
-                          </div>
-                        ) : null}
-                      </div>
-                    ) : null}
-                    {r.ideal_answer && (
-                      <div className="mt-3 p-3 rounded-lg" style={{ background: "rgba(16,185,129,0.05)", border: "1px solid rgba(16,185,129,0.1)" }}>
-                        <div className="text-xs font-bold mb-1" style={{ color: "#10b981" }}>Ideal Answer</div>
-                        <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{r.ideal_answer}</p>
-                      </div>
-                    )}
-                  </>
-                )}
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-
-      <div className="flex gap-3">
-        <Link href="/interview" className="btn-primary flex items-center gap-2" style={{ textDecoration: "none" }}>
+        <Link href="/interview" className="btn-primary flex items-center gap-2 text-sm" style={{ textDecoration: "none", padding: "9px 16px" }}>
           <Play size={14} /> New Interview
         </Link>
-        <Link href="/results" className="btn-ghost flex items-center gap-2" style={{ textDecoration: "none" }}>
-          ← All Results
-        </Link>
+      </div>
+
+      {/* Score overview */}
+      <div className="grid gap-4 mb-8 animate-fade-up delay-100" style={{ gridTemplateColumns: rec ? "1fr 1fr auto" : "1fr 1fr" }}>
+        {/* Score */}
+        <div className="card p-6" style={{ background: "linear-gradient(135deg, rgba(0,212,255,0.06), var(--bg-card))", borderColor: "rgba(0,212,255,0.2)" }}>
+          <div className="flex items-center gap-2 mb-3">
+            <Star size={14} style={{ color: "var(--accent-cyan)" }} />
+            <span className="text-xs font-bold tracking-wide" style={{ fontFamily: "'Syne', sans-serif", color: "var(--text-secondary)" }}>OVERALL SCORE</span>
+          </div>
+          {isPending ? (
+            <div className="py-4">
+              <p className="text-2xl font-bold" style={{ fontFamily: "'Syne', sans-serif", color: "var(--text-muted)" }}>Pending</p>
+              <p className="text-xs mt-2" style={{ color: "var(--text-muted)" }}>AI evaluation in progress...</p>
+            </div>
+          ) : (
+            <>
+              <div className="text-6xl font-bold" style={{ fontFamily: "'Syne', sans-serif", color: "var(--accent-cyan)" }}>
+                {data.overall_score?.toFixed(1)}<span className="text-2xl" style={{ color: "var(--text-muted)" }}>/10</span>
+              </div>
+              {!isPending && (
+                <div className="mt-3 space-y-2">
+                  {avgRelevance > 0 && <ScoreBar label="Relevance" value={avgRelevance} />}
+                  {avgClarity > 0 && <ScoreBar label="Clarity" value={avgClarity} />}
+                  {avgDepth > 0 && <ScoreBar label="Depth" value={avgDepth} />}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* Feedback */}
+        <div className="card p-6">
+          <div className="text-xs font-bold tracking-wide mb-3" style={{ fontFamily: "'Syne', sans-serif", color: "var(--text-secondary)" }}>AI FEEDBACK SUMMARY</div>
+          <p className="text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>
+            {isPending ? "Your answers have been saved. AI scoring will be available once evaluation completes." : (data.overall_feedback || "Good performance overall.")}
+          </p>
+        </div>
+
+        {/* Recommendation */}
+        {rec && (
+          <div className="card p-6 flex flex-col items-center justify-center min-w-[140px]" style={{ background: `${rec.color}0d`, borderColor: `${rec.color}40` }}>
+            <rec.icon size={28} style={{ color: rec.color, marginBottom: 8 }} />
+            <div className="text-base font-bold text-center" style={{ fontFamily: "'Syne', sans-serif", color: rec.color }}>{rec.label}</div>
+            <div className="text-xs mt-1 text-center" style={{ color: "var(--text-muted)" }}>AI Recommendation</div>
+          </div>
+        )}
+      </div>
+
+      {/* Per-question breakdown */}
+      <div className="animate-fade-up delay-200">
+        <h2 className="text-base font-bold mb-4" style={{ fontFamily: "'Syne', sans-serif", color: "var(--text-primary)" }}>Question Breakdown</h2>
+        <div className="space-y-3">
+          {data.results.map((q, i) => {
+            const isOpen = expandedQ === i;
+            const score = q.score ?? null;
+            const scoreColor = score === null ? "var(--text-muted)" : score >= 8 ? "var(--accent-green)" : score >= 6 ? "var(--accent-cyan)" : "var(--accent-red)";
+
+            return (
+              <div key={q.id} className="card overflow-hidden transition-all" style={{ borderColor: isOpen ? "var(--border-bright)" : "var(--border)" }}>
+                <button className="w-full flex items-start gap-4 p-5 text-left hover:bg-white/[0.02] transition-colors" onClick={() => setExpandedQ(isOpen ? null : i)}>
+                  <div className="w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5" style={{ background: `${scoreColor}18`, color: scoreColor, fontFamily: "'Syne', sans-serif" }}>
+                    {i + 1}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>{q.question_text || `Question ${i + 1}`}</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      {q.feedback && <span className="text-xs" style={{ color: "var(--text-muted)" }}>{q.feedback.substring(0, 60)}...</span>}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 flex-shrink-0">
+                    <div className="text-xl font-bold" style={{ fontFamily: "'Syne', sans-serif", color: scoreColor }}>
+                      {score !== null ? score.toFixed(1) : "—"}
+                    </div>
+                    {isOpen ? <ChevronUp size={15} style={{ color: "var(--text-muted)" }} /> : <ChevronDown size={15} style={{ color: "var(--text-muted)" }} />}
+                  </div>
+                </button>
+
+                {isOpen && (
+                  <div className="px-5 pb-5 animate-fade-in" style={{ borderTop: "1px solid var(--border)" }}>
+                    {/* Sub-scores */}
+                    {(q.relevance_score || q.clarity_score || q.depth_score) && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pt-4 mb-5">
+                        {[["Relevance", q.relevance_score], ["Clarity", q.clarity_score], ["Depth", q.depth_score]].map(([label, val]) =>
+                          val !== null && (
+                            <div key={label as string} className="rounded-lg p-3 text-center" style={{ background: "var(--bg-surface)" }}>
+                              <div className="text-lg font-bold" style={{ fontFamily: "'Syne', sans-serif", color: (val as number) >= 8 ? "var(--accent-green)" : (val as number) >= 6 ? "var(--accent-cyan)" : "var(--accent-red)" }}>{(val as number).toFixed(1)}</div>
+                              <div className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>{label}</div>
+                            </div>
+                          )
+                        )}
+                      </div>
+                    )}
+
+                    {/* Your answer */}
+                    {q.answer_text && (
+                      <div className="mb-4">
+                        <div className="text-xs font-bold mb-2 tracking-wide" style={{ fontFamily: "'Syne', sans-serif", color: "var(--text-muted)" }}>YOUR ANSWER</div>
+                        <p className="text-sm leading-relaxed p-3 rounded-lg" style={{ background: "var(--bg-surface)", color: "var(--text-secondary)" }}>{q.answer_text}</p>
+                      </div>
+                    )}
+
+                    {/* Ideal answer */}
+                    {q.ideal_answer && (
+                      <div className="mb-4">
+                        <div className="text-xs font-bold mb-2 tracking-wide" style={{ fontFamily: "'Syne', sans-serif", color: "var(--accent-cyan)" }}>IDEAL ANSWER</div>
+                        <p className="text-sm leading-relaxed p-3 rounded-lg" style={{ background: "rgba(0,212,255,0.05)", border: "1px solid rgba(0,212,255,0.15)", color: "var(--text-secondary)" }}>{q.ideal_answer}</p>
+                      </div>
+                    )}
+
+                    {/* Strengths & Improvements */}
+                    {(q.strengths || q.improvements) && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {q.strengths && (
+                          <div>
+                            <div className="text-xs font-bold mb-2 tracking-wide flex items-center gap-1" style={{ fontFamily: "'Syne', sans-serif", color: "var(--accent-green)" }}>
+                              <CheckCircle2 size={11} /> STRENGTHS
+                            </div>
+                            <ul className="space-y-1">
+                              {q.strengths.map((s) => <li key={s} className="text-xs flex items-start gap-1.5" style={{ color: "var(--text-secondary)" }}><span style={{ color: "var(--accent-green)", marginTop: 2 }}>·</span>{s}</li>)}
+                            </ul>
+                          </div>
+                        )}
+                        {q.improvements && (
+                          <div>
+                            <div className="text-xs font-bold mb-2 tracking-wide flex items-center gap-1" style={{ fontFamily: "'Syne', sans-serif", color: "var(--accent-amber)" }}>
+                              <AlertCircle size={11} /> IMPROVE
+                            </div>
+                            <ul className="space-y-1">
+                              {q.improvements.map((s) => <li key={s} className="text-xs flex items-start gap-1.5" style={{ color: "var(--text-secondary)" }}><span style={{ color: "var(--accent-amber)", marginTop: 2 }}>·</span>{s}</li>)}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {isPending && <p className="text-xs mt-4 text-center" style={{ color: "var(--text-muted)" }}>⏳ Detailed scores available after AI evaluation</p>}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
 }
 
-// ── Main Page ───────────────────────────────────────────────
-function ResultsContent() {
-  const params = useSearchParams();
-  const interviewId = params.get("id");
-
-  if (interviewId) return <SingleResult interviewId={interviewId} />;
-  return <PastInterviewsList />;
-}
-
 export default function ResultsPage() {
   const router = useRouter();
-  useEffect(() => { if (!getUser()) router.replace("/login"); }, [router]);
+  useEffect(() => {
+    if (!getUser()) router.replace("/login");
+  }, [router]);
+
   return (
     <div className="min-h-screen" style={{ background: "var(--bg-deep)" }}>
       <Sidebar />
-      <main className="ml-[220px] p-8">
-        <Suspense fallback={
-          <div className="flex items-center justify-center py-24">
-            <Loader2 size={20} className="animate-spin" style={{ color: "var(--text-muted)" }} />
-          </div>
-        }>
+      <main className="lg:ml-[220px] pt-16 lg:pt-0 p-4 sm:p-6 lg:p-8">
+        <Suspense fallback={<div className="flex items-center gap-2 py-24 justify-center" style={{ color: "var(--text-muted)" }}><Loader2 size={20} className="animate-spin" /> Loading...</div>}>
           <ResultsContent />
         </Suspense>
       </main>

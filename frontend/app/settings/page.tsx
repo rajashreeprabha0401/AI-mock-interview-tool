@@ -2,376 +2,330 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Sidebar from "../components/Sidebar";
-import { getUser, saveSession, UserOut } from "../../lib/api";
-import { Shield, Key, Trash2, Eye, EyeOff, CheckCircle2, AlertCircle, User, Mail, Save } from "lucide-react";
+import { getUser, updateUserLocally, profile as profileApi, UserOut } from "../../lib/api";
+import { setHRPassword, getHRPassword } from "../../lib/hr-auth";
+import {
+  User, Mail, Shield, Save, CheckCircle2, Camera, Calendar, Lock,
+  Bell, Palette, ChevronRight, Key, Eye, EyeOff, Briefcase,
+} from "lucide-react";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+type Theme = "dark" | "dimmed" | "light";
+interface Preferences { emailSummaries: boolean; weeklyDigest: boolean; hireAlerts: boolean; }
 
-function getToken() {
-  if (typeof window === "undefined") return "";
-  return localStorage.getItem("token") || "";
+function applyTheme(t: Theme) {
+  const root = document.documentElement;
+  root.classList.remove("theme-dark", "theme-dimmed", "theme-light");
+  if (t !== "dark") root.classList.add(`theme-${t}`);
+  localStorage.setItem("app_theme", t);
 }
 
-async function apiFetch(path: string, options: RequestInit = {}) {
-  const res = await fetch(`${API}/api${path}`, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${getToken()}`,
-      ...(options.headers || {}),
-    },
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    const msg = Array.isArray(data.detail)
-      ? data.detail.map((d: any) => d.msg).join(", ")
-      : data.detail || `Error ${res.status}`;
-    throw new Error(msg);
-  }
-  return data;
+const PREFS_KEY = "user_preferences";
+const DEFAULT_PREFS: Preferences = { emailSummaries: true, weeklyDigest: false, hireAlerts: true };
+function loadPrefs(): Preferences {
+  if (typeof window === "undefined") return DEFAULT_PREFS;
+  try { const raw = localStorage.getItem(PREFS_KEY); return raw ? { ...DEFAULT_PREFS, ...JSON.parse(raw) } : DEFAULT_PREFS; }
+  catch { return DEFAULT_PREFS; }
+}
+
+function SectionHeader({ icon: Icon, label, color }: { icon: React.ElementType; label: string; color: string }) {
+  return (
+    <div className="flex items-center gap-2 mb-5">
+      <Icon size={15} style={{ color }} />
+      <span className="text-sm font-bold" style={{ fontFamily: "'Syne', sans-serif", color: "var(--text-primary)" }}>{label}</span>
+    </div>
+  );
+}
+
+function DetailRow({ label, value, valueColor, mono }: { label: string; value: string; valueColor?: string; mono?: boolean }) {
+  return (
+    <div className="flex items-center justify-between">
+      <span className="text-xs" style={{ color: "var(--text-muted)" }}>{label}</span>
+      <span className="text-xs font-semibold" style={{ color: valueColor || "var(--text-secondary)", fontFamily: mono ? "'DM Mono', monospace" : "'Syne', sans-serif" }}>{value}</span>
+    </div>
+  );
 }
 
 export default function SettingsPage() {
   const router = useRouter();
   const [user, setUser] = useState<UserOut | null>(null);
-
-  // Profile
   const [fullName, setFullName] = useState("");
-  const [profileMsg, setProfileMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
-  const [savingProfile, setSavingProfile] = useState(false);
-
-  // Password
-  const [currentPwd, setCurrentPwd] = useState("");
-  const [newPwd, setNewPwd] = useState("");
-  const [confirmPwd, setConfirmPwd] = useState("");
-  const [showPwd, setShowPwd] = useState(false);
-  const [pwdMsg, setPwdMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
-  const [savingPwd, setSavingPwd] = useState(false);
-
-  // API Key
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [theme, setTheme] = useState<Theme>("dark");
   const [apiKey, setApiKey] = useState("");
   const [showApiKey, setShowApiKey] = useState(false);
-
-  // Theme
-  const [theme, setTheme] = useState("dark");
-
-  useEffect(() => {
-    const saved = localStorage.getItem("theme") || "dark";
-    setTheme(saved);
-    document.documentElement.className = saved === "dark" ? "" : `theme-${saved}`;
-  }, []);
-
-  const changeTheme = (t: string) => {
-    setTheme(t);
-    localStorage.setItem("theme", t);
-    document.documentElement.className = t === "dark" ? "" : `theme-${t}`;
-  };
-  // Delete account
-  const [deleteConfirm, setDeleteConfirm] = useState("");
-  const [deletingAccount, setDeletingAccount] = useState(false);
+  const [apiKeySaved, setApiKeySaved] = useState(false);
+  const [prefs, setPrefs] = useState<Preferences>(DEFAULT_PREFS);
+  const [hrPassword, setHrPasswordState] = useState("");
+  const [showHrPass, setShowHrPass] = useState(false);
+  const [hrPassSaved, setHrPassSaved] = useState(false);
 
   useEffect(() => {
     const u = getUser();
     if (!u) { router.replace("/login"); return; }
     setUser(u);
     setFullName(u.full_name);
-    const saved = localStorage.getItem("api_key") || "";
-    setApiKey(saved);
+    const savedTheme = (localStorage.getItem("app_theme") as Theme) || "dark";
+    setTheme(savedTheme);
+    setApiKey(localStorage.getItem("api_key") || "");
+    setPrefs(loadPrefs());
+    setHrPasswordState(getHRPassword());
   }, [router]);
 
-  const saveProfile = async () => {
-    if (!fullName.trim()) { setProfileMsg({ type: "err", text: "Name cannot be empty" }); return; }
-    setSavingProfile(true); setProfileMsg(null);
-    try {
-      const updated = await apiFetch("/auth/profile", {
-        method: "PUT",
-        body: JSON.stringify({ full_name: fullName.trim() }),
-      });
-      const token = getToken();
-      saveSession(token, updated);
-      setUser(updated);
-      setProfileMsg({ type: "ok", text: "Profile updated successfully!" });
-    } catch (e: any) {
-      setProfileMsg({ type: "err", text: e.message });
-    } finally {
-      setSavingProfile(false);
-    }
+  const handleThemeChange = (t: Theme) => { setTheme(t); applyTheme(t); };
+
+  const handlePrefToggle = (key: keyof Preferences) => {
+    const next = { ...prefs, [key]: !prefs[key] };
+    setPrefs(next);
+    localStorage.setItem(PREFS_KEY, JSON.stringify(next));
   };
 
-  const changePassword = async () => {
-    if (!currentPwd || !newPwd || !confirmPwd) { setPwdMsg({ type: "err", text: "All fields required" }); return; }
-    if (newPwd !== confirmPwd) { setPwdMsg({ type: "err", text: "New passwords do not match" }); return; }
-    if (newPwd.length < 6) { setPwdMsg({ type: "err", text: "Password must be at least 6 characters" }); return; }
-    setSavingPwd(true); setPwdMsg(null);
-    try {
-      await apiFetch("/auth/change-password", {
-        method: "POST",
-        body: JSON.stringify({ current_password: currentPwd, new_password: newPwd }),
-      });
-      setPwdMsg({ type: "ok", text: "Password changed successfully!" });
-      setCurrentPwd(""); setNewPwd(""); setConfirmPwd("");
-    } catch (e: any) {
-      setPwdMsg({ type: "err", text: e.message });
-    } finally {
-      setSavingPwd(false);
-    }
-  };
-
-  const saveApiKey = () => {
+  const handleApiKeySave = () => {
     localStorage.setItem("api_key", apiKey.trim());
-    alert("✅ API Key saved!");
+    setApiKeySaved(true);
+    setTimeout(() => setApiKeySaved(false), 2500);
   };
 
-  const deleteAccount = async () => {
-    if (deleteConfirm !== "DELETE") return;
-    setDeletingAccount(true);
+  const handleHrPassSave = () => {
+    if (!hrPassword.trim()) return;
+    setHRPassword(hrPassword.trim());
+    setHrPassSaved(true);
+    setTimeout(() => setHrPassSaved(false), 2500);
+  };
+
+  const initials = fullName ? fullName.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase() : "?";
+  const joinedDate = user?.created_at
+    ? new Date(user.created_at).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })
+    : "—";
+
+  const handleSave = async () => {
+    if (!fullName.trim()) { setError("Name cannot be empty."); return; }
+    setSaving(true); setError(null);
     try {
-      await apiFetch("/auth/account", { method: "DELETE" });
-      localStorage.clear();
-      router.replace("/login");
-    } catch (e: any) {
-      alert("Error: " + e.message);
-      setDeletingAccount(false);
-    }
+      await profileApi.update({ full_name: fullName.trim() });
+      updateUserLocally({ full_name: fullName.trim() });
+      setUser((prev) => prev ? { ...prev, full_name: fullName.trim() } : prev);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+    } catch (e: unknown) {
+      setError((e as Error).message || "Failed to save.");
+    } finally { setSaving(false); }
   };
 
-  if (!user) return null;
+  const roleColor = user?.role === "admin" ? "var(--accent-amber)" : "var(--accent-cyan)";
+  const roleBg = user?.role === "admin" ? "rgba(245,158,11,0.12)" : "rgba(0,212,255,0.08)";
+  const themeOptions: { key: Theme; label: string; preview: string }[] = [
+    { key: "dark", label: "Dark", preview: "#080c14" },
+    { key: "dimmed", label: "Dimmed", preview: "#111927" },
+    { key: "light", label: "Light", preview: "#eef2fb" },
+  ];
+  const prefRows: { key: keyof Preferences; label: string; sub: string }[] = [
+    { key: "emailSummaries", label: "Email me interview summaries", sub: "Get a recap after each session" },
+    { key: "weeklyDigest", label: "Weekly progress digest", sub: "Summary of your activity and scores" },
+    { key: "hireAlerts", label: "Hire recommendation alerts", sub: "Notify when a recommendation is ready" },
+  ];
 
   return (
     <div className="min-h-screen" style={{ background: "var(--bg-deep)" }}>
       <Sidebar />
-      <main className="ml-[220px] p-8 max-w-4xl">
-        <div className="mb-8">
+      <main className="lg:ml-[220px] pt-16 lg:pt-0 p-4 sm:p-6 lg:p-8">
+        <div className="mb-8 animate-fade-up">
+          <p className="text-xs mb-1 tracking-widest uppercase font-bold" style={{ color: "var(--text-muted)" }}>Account</p>
           <h1 className="text-3xl font-bold" style={{ fontFamily: "'Syne', sans-serif", color: "var(--text-primary)" }}>Settings</h1>
-          <p className="text-sm mt-1" style={{ color: "var(--text-secondary)" }}>Manage your account, security and preferences</p>
+          <p className="text-sm mt-1" style={{ color: "var(--text-secondary)" }}>Manage your profile and preferences</p>
         </div>
 
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          {/* Left Column */}
-          <div className="space-y-6">
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-6 max-w-4xl">
+          <div className="space-y-5">
             {/* Profile */}
-            <div className="card p-6">
-              <div className="flex items-center gap-2 mb-5">
-                <User size={16} style={{ color: "var(--accent-cyan)" }} />
-                <h2 className="text-sm font-bold tracking-wide uppercase" style={{ fontFamily: "'Syne', sans-serif", color: "var(--text-primary)" }}>Profile</h2>
-              </div>
-
-              {/* Avatar */}
-              <div className="flex items-center gap-4 mb-5">
-                <div className="w-16 h-16 rounded-2xl flex items-center justify-center text-2xl font-bold"
-                  style={{ background: "rgba(0,212,255,0.12)", color: "var(--accent-cyan)", fontFamily: "'Syne', sans-serif" }}>
-                  {user.full_name?.[0]?.toUpperCase()}
-                </div>
-                <div>
-                  <div className="font-bold" style={{ color: "var(--text-primary)" }}>{user.full_name}</div>
-                  <div className="text-xs" style={{ color: "var(--text-muted)" }}>{user.email}</div>
-                  <div className="text-xs mt-0.5 px-2 py-0.5 rounded-full inline-block capitalize"
-                    style={{ background: "rgba(0,212,255,0.1)", color: "var(--accent-cyan)" }}>{user.role}</div>
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                <div>
-                  <label className="block text-xs font-bold mb-1.5 tracking-wide uppercase"
-                    style={{ fontFamily: "'Syne', sans-serif", color: "var(--text-secondary)" }}>Full Name</label>
-                  <input type="text" className="input-field w-full" value={fullName}
-                    onChange={e => setFullName(e.target.value)} />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold mb-1.5 tracking-wide uppercase"
-                    style={{ fontFamily: "'Syne', sans-serif", color: "var(--text-secondary)" }}>Email</label>
-                  <input type="email" className="input-field w-full" value={user.email} disabled
-                    style={{ opacity: 0.6, cursor: "not-allowed" }} />
-                </div>
-
-                {profileMsg && (
-                  <div className="flex items-center gap-2 text-xs px-3 py-2 rounded-lg"
-                    style={{
-                      background: profileMsg.type === "ok" ? "rgba(16,185,129,0.08)" : "rgba(239,68,68,0.08)",
-                      color: profileMsg.type === "ok" ? "#10b981" : "#ef4444",
-                    }}>
-                    {profileMsg.type === "ok" ? <CheckCircle2 size={12} /> : <AlertCircle size={12} />}
-                    {profileMsg.text}
+            <div className="card p-6 animate-fade-up">
+              <SectionHeader icon={User} label="Profile Information" color="var(--accent-cyan)" />
+              <div className="flex items-center gap-5 mb-6 pb-6" style={{ borderBottom: "1px solid var(--border)" }}>
+                <div className="relative">
+                  <div className="w-16 h-16 rounded-2xl flex items-center justify-center text-xl font-bold"
+                    style={{ background: "rgba(0,212,255,0.12)", color: "var(--accent-cyan)", fontFamily: "'Syne', sans-serif" }}>
+                    {initials}
                   </div>
-                )}
-
-                <button onClick={saveProfile} disabled={savingProfile}
-                  className="btn-primary flex items-center gap-2 disabled:opacity-50">
-                  <Save size={14} /> {savingProfile ? "Saving..." : "Save Changes"}
-                </button>
-              </div>
-            </div>
-            {/* Theme */}
-            <div className="card p-6">
-              <div className="flex items-center gap-2 mb-4">
-                <span style={{ fontSize: 16 }}>??</span>
-                <h2 className="text-sm font-bold tracking-wide uppercase" style={{ fontFamily: "'Syne', sans-serif", color: "var(--text-primary)" }}>Theme</h2>
-              </div>
-              <div className="grid grid-cols-3 gap-2">
-                {[
-                  { id: "dark", label: "Dark", bg: "#0a0f1e", accent: "#00d4ff" },
-                  { id: "light", label: "Light", bg: "#f0f4ff", accent: "#0066cc" },
-                  { id: "midnight", label: "Midnight", bg: "#050510", accent: "#a78bfa" },
-                ].map((t) => (
-                  <button key={t.id} onClick={() => changeTheme(t.id)}
-                    className="p-3 rounded-lg text-xs font-bold transition-all"
-                    style={{
-                      background: t.bg,
-                      color: t.accent,
-                      border: theme === t.id ? `2px solid ${t.accent}` : "2px solid transparent",
-                      fontFamily: "'Syne', sans-serif",
-                    }}>
-                    {t.label}
+                  <button className="absolute -bottom-1.5 -right-1.5 w-6 h-6 rounded-full flex items-center justify-center"
+                    style={{ background: "var(--bg-elevated)", border: "1px solid var(--border-bright)" }} title="Coming soon">
+                    <Camera size={11} style={{ color: "var(--text-muted)" }} />
                   </button>
-                ))}
+                </div>
+                <div>
+                  <div className="text-base font-bold" style={{ fontFamily: "'Syne', sans-serif", color: "var(--text-primary)" }}>{user?.full_name || "—"}</div>
+                  <div className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>{user?.email}</div>
+                  <span className="inline-block mt-1.5 text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: roleBg, color: roleColor, fontFamily: "'Syne', sans-serif" }}>{user?.role}</span>
+                </div>
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold mb-1.5 tracking-wide uppercase" style={{ color: "var(--text-muted)", fontFamily: "'Syne', sans-serif" }}>Full Name</label>
+                  <div className="relative">
+                    <User size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--text-muted)" }} />
+                    <input type="text" value={fullName} onChange={(e) => { setFullName(e.target.value); setSaved(false); setError(null); }} className="input-field pl-9 w-full" placeholder="Your full name" />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold mb-1.5 tracking-wide uppercase" style={{ color: "var(--text-muted)", fontFamily: "'Syne', sans-serif" }}>Email Address</label>
+                  <div className="relative">
+                    <Mail size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--text-muted)" }} />
+                    <input type="email" value={user?.email || ""} readOnly className="input-field pl-9 w-full" style={{ opacity: 0.6, cursor: "not-allowed" }} />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold mb-1.5 tracking-wide uppercase" style={{ color: "var(--text-muted)", fontFamily: "'Syne', sans-serif" }}>Role</label>
+                  <div className="relative">
+                    <Shield size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--text-muted)" }} />
+                    <input type="text" value={user?.role || ""} readOnly className="input-field pl-9 w-full capitalize" style={{ opacity: 0.6, cursor: "not-allowed" }} />
+                  </div>
+                </div>
+              </div>
+              {error && <div className="mt-4 rounded-lg px-4 py-3 text-sm" style={{ background: "rgba(239,68,68,0.06)", border: "1px solid rgba(239,68,68,0.25)", color: "var(--accent-red)" }}>{error}</div>}
+              <div className="flex items-center gap-3 mt-6">
+                <button onClick={handleSave} disabled={saving || fullName === user?.full_name} className="btn-primary flex items-center gap-2">
+                  {saving ? <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" /> : saved ? <CheckCircle2 size={15} /> : <Save size={15} />}
+                  {saving ? "Saving…" : saved ? "Saved!" : "Save Changes"}
+                </button>
+                {fullName !== user?.full_name && !saving && (
+                  <button onClick={() => { setFullName(user?.full_name || ""); setError(null); }} className="text-sm" style={{ color: "var(--text-muted)" }}>Discard</button>
+                )}
+                {saved && <span className="text-xs flex items-center gap-1" style={{ color: "var(--accent-green)" }}><CheckCircle2 size={12} /> Profile updated</span>}
               </div>
             </div>
-
 
             {/* API Key */}
-            <div className="card p-6">
-              <div className="flex items-center gap-2 mb-4">
-                <Key size={16} style={{ color: "var(--accent-cyan)" }} />
-                <h2 className="text-sm font-bold tracking-wide uppercase" style={{ fontFamily: "'Syne', sans-serif", color: "var(--text-primary)" }}>API Key</h2>
-              </div>
+            <div className="card p-6 animate-fade-up delay-100">
+              <SectionHeader icon={Key} label="API Key" color="var(--accent-green)" />
               <p className="text-xs mb-4" style={{ color: "var(--text-secondary)" }}>
-                Your OpenRouter API key is used for AI interview evaluation. Without this, scores will use fallback values.
+                Your API key is sent as <code style={{ fontFamily: "'DM Mono'", color: "var(--accent-cyan)", background: "var(--bg-surface)", padding: "1px 5px", borderRadius: "4px" }}>X-API-Key</code> with every backend request. Without this, interview generation will fail.
               </p>
               <div className="relative mb-3">
-                <input
-                  type={showApiKey ? "text" : "password"}
-                  placeholder="sk-or-v1-..."
-                  className="input-field w-full pr-10"
-                  value={apiKey}
-                  onChange={e => setApiKey(e.target.value)}
-                />
-                <button type="button" onClick={() => setShowApiKey(!showApiKey)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2"
-                  style={{ color: "var(--text-muted)" }}>
+                <Key size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--text-muted)" }} />
+                <input type={showApiKey ? "text" : "password"} value={apiKey} onChange={(e) => setApiKey(e.target.value)}
+                  className="input-field pl-9 pr-10 w-full" placeholder="Paste your API key here…" />
+                <button type="button" onClick={() => setShowApiKey(!showApiKey)} className="absolute right-3 top-1/2 -translate-y-1/2" style={{ color: "var(--text-muted)" }}>
                   {showApiKey ? <EyeOff size={14} /> : <Eye size={14} />}
                 </button>
               </div>
-              {apiKey && (
-                <p className="text-xs mb-3" style={{ color: "#10b981" }}>✅ API key configured</p>
-              )}
-              <button onClick={saveApiKey} className="btn-primary flex items-center gap-2">
-                <Save size={14} /> Save API Key
+              <button onClick={handleApiKeySave} className="btn-primary flex items-center gap-2 text-sm" style={{ background: "var(--accent-green)", padding: "9px 18px" }}>
+                {apiKeySaved ? <CheckCircle2 size={14} /> : <Save size={14} />}
+                {apiKeySaved ? "Key Saved!" : "Save API Key"}
               </button>
+              {apiKey
+                ? <p className="text-[11px] mt-2 flex items-center gap-1" style={{ color: "var(--accent-green)" }}><CheckCircle2 size={11} /> API key configured — requests will include it.</p>
+                : <p className="text-[11px] mt-2" style={{ color: "var(--accent-amber)" }}>⚠ No API key set — interviews may not generate responses.</p>
+              }
             </div>
-          </div>
 
-          {/* Right Column */}
-          <div className="space-y-6">
-            {/* Security - Change Password */}
-            <div className="card p-6">
-              <div className="flex items-center gap-2 mb-5">
-                <Shield size={16} style={{ color: "var(--accent-cyan)" }} />
-                <h2 className="text-sm font-bold tracking-wide uppercase" style={{ fontFamily: "'Syne', sans-serif", color: "var(--text-primary)" }}>Security</h2>
-              </div>
-
-              <h3 className="text-sm font-bold mb-4" style={{ color: "var(--text-primary)" }}>Change Password</h3>
+            {/* Preferences */}
+            <div className="card p-6 animate-fade-up delay-100">
+              <SectionHeader icon={Bell} label="Preferences" color="var(--accent-amber)" />
               <div className="space-y-3">
-                <div>
-                  <label className="block text-xs font-bold mb-1.5 tracking-wide uppercase"
-                    style={{ fontFamily: "'Syne', sans-serif", color: "var(--text-secondary)" }}>Current Password</label>
-                  <div className="relative">
-                    <input type={showPwd ? "text" : "password"} className="input-field w-full pr-10"
-                      placeholder="••••••••" value={currentPwd} onChange={e => setCurrentPwd(e.target.value)} />
-                    <button type="button" onClick={() => setShowPwd(!showPwd)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2" style={{ color: "var(--text-muted)" }}>
-                      {showPwd ? <EyeOff size={14} /> : <Eye size={14} />}
+                {prefRows.map((pref) => (
+                  <div key={pref.key} className="flex items-center justify-between py-2" style={{ borderBottom: "1px solid var(--border)" }}>
+                    <div>
+                      <div className="text-xs font-semibold" style={{ fontFamily: "'Syne', sans-serif", color: "var(--text-primary)" }}>{pref.label}</div>
+                      <div className="text-[11px]" style={{ color: "var(--text-muted)" }}>{pref.sub}</div>
+                    </div>
+                    <button onClick={() => handlePrefToggle(pref.key)}
+                      className="relative w-9 h-5 rounded-full transition-all flex-shrink-0"
+                      style={{ background: prefs[pref.key] ? "var(--accent-cyan)" : "var(--bg-surface)", border: prefs[pref.key] ? "none" : "1px solid var(--border-bright)" }}>
+                      <div className="absolute top-0.5 w-4 h-4 rounded-full transition-all"
+                        style={{ background: prefs[pref.key] ? "var(--bg-deep)" : "var(--text-muted)", left: prefs[pref.key] ? "calc(100% - 18px)" : "2px" }} />
                     </button>
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold mb-1.5 tracking-wide uppercase"
-                    style={{ fontFamily: "'Syne', sans-serif", color: "var(--text-secondary)" }}>New Password</label>
-                  <input type={showPwd ? "text" : "password"} className="input-field w-full"
-                    placeholder="Min 6 characters" value={newPwd} onChange={e => setNewPwd(e.target.value)} />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold mb-1.5 tracking-wide uppercase"
-                    style={{ fontFamily: "'Syne', sans-serif", color: "var(--text-secondary)" }}>Confirm New Password</label>
-                  <input type={showPwd ? "text" : "password"} className="input-field w-full"
-                    placeholder="Repeat new password" value={confirmPwd} onChange={e => setConfirmPwd(e.target.value)} />
-                </div>
-
-                {pwdMsg && (
-                  <div className="flex items-center gap-2 text-xs px-3 py-2 rounded-lg"
-                    style={{
-                      background: pwdMsg.type === "ok" ? "rgba(16,185,129,0.08)" : "rgba(239,68,68,0.08)",
-                      color: pwdMsg.type === "ok" ? "#10b981" : "#ef4444",
-                    }}>
-                    {pwdMsg.type === "ok" ? <CheckCircle2 size={12} /> : <AlertCircle size={12} />}
-                    {pwdMsg.text}
-                  </div>
-                )}
-
-                <button onClick={changePassword} disabled={savingPwd}
-                  className="btn-primary flex items-center gap-2 disabled:opacity-50">
-                  <Shield size={14} /> {savingPwd ? "Changing..." : "Change Password"}
-                </button>
-              </div>
-            </div>
-
-            {/* Danger Zone */}
-            <div className="card p-6" style={{ border: "1px solid rgba(239,68,68,0.3)" }}>
-              <div className="flex items-center gap-2 mb-4">
-                <Trash2 size={16} style={{ color: "#ef4444" }} />
-                <h2 className="text-sm font-bold tracking-wide uppercase" style={{ fontFamily: "'Syne', sans-serif", color: "#ef4444" }}>Danger Zone</h2>
-              </div>
-
-              <p className="text-sm mb-4" style={{ color: "var(--text-secondary)" }}>
-                Permanently delete your account and all your interview data. This action <strong>cannot be undone</strong>.
-              </p>
-
-              <div className="mb-3">
-                <label className="block text-xs font-bold mb-1.5 tracking-wide uppercase"
-                  style={{ fontFamily: "'Syne', sans-serif", color: "var(--text-secondary)" }}>
-                  Type <strong style={{ color: "#ef4444" }}>DELETE</strong> to confirm
-                </label>
-                <input type="text" className="input-field w-full"
-                  placeholder="Type DELETE here"
-                  value={deleteConfirm}
-                  onChange={e => setDeleteConfirm(e.target.value)}
-                  style={{ border: deleteConfirm === "DELETE" ? "1px solid #ef4444" : undefined }}
-                />
-              </div>
-
-              <button
-                onClick={deleteAccount}
-                disabled={deleteConfirm !== "DELETE" || deletingAccount}
-                className="w-full py-2.5 rounded-lg text-sm font-bold transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-                style={{
-                  background: "rgba(239,68,68,0.15)",
-                  color: "#ef4444",
-                  border: "1px solid rgba(239,68,68,0.3)",
-                  fontFamily: "'Syne', sans-serif",
-                }}>
-                {deletingAccount ? "Deleting..." : "🗑 Delete My Account"}
-              </button>
-            </div>
-
-            {/* Account Info */}
-            <div className="card p-6">
-              <h2 className="text-sm font-bold mb-4 tracking-wide uppercase"
-                style={{ fontFamily: "'Syne', sans-serif", color: "var(--text-secondary)" }}>Account Info</h2>
-              <div className="space-y-3 text-sm">
-                {[
-                  { label: "Account Status", value: user.is_active ? "Active" : "Inactive", color: user.is_active ? "#10b981" : "#ef4444" },
-                  { label: "Role", value: user.role, color: "var(--accent-cyan)" },
-                  { label: "Member Since", value: user.created_at ? new Date(user.created_at).toLocaleDateString("en-IN") : "—" },
-                  { label: "User ID", value: user.id.slice(0, 8) + "..." },
-                ].map(({ label, value, color }) => (
-                  <div key={label} className="flex justify-between items-center py-2"
-                    style={{ borderBottom: "1px solid var(--border)" }}>
-                    <span style={{ color: "var(--text-secondary)" }}>{label}</span>
-                    <span className="font-semibold" style={{ color: color || "var(--text-primary)", fontFamily: "'Syne', sans-serif" }}>
-                      {value}
-                    </span>
                   </div>
                 ))}
               </div>
+              <p className="text-[11px] mt-3" style={{ color: "var(--text-muted)" }}>Preferences save automatically and persist across sessions.</p>
+            </div>
+
+            {/* Appearance / Theme */}
+            <div className="card p-6 animate-fade-up delay-200">
+              <SectionHeader icon={Palette} label="Appearance" color="#a78bfa" />
+              <div className="flex gap-3">
+                {themeOptions.map((t) => (
+                  <button key={t.key} onClick={() => handleThemeChange(t.key)}
+                    className="flex-1 rounded-xl p-3 text-xs font-semibold transition-all"
+                    style={{
+                      fontFamily: "'Syne', sans-serif",
+                      background: theme === t.key ? "rgba(0,212,255,0.08)" : "var(--bg-surface)",
+                      border: theme === t.key ? "1px solid rgba(0,212,255,0.3)" : "1px solid var(--border)",
+                      color: theme === t.key ? "var(--accent-cyan)" : "var(--text-muted)",
+                    }}>
+                    <div className="w-full h-8 rounded-lg mb-2" style={{ background: t.preview, border: "1px solid var(--border)" }} />
+                    {t.label}
+                    {theme === t.key && <div className="mt-1 text-[10px]" style={{ color: "var(--accent-green)" }}>✓ Active</div>}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[11px] mt-3" style={{ color: "var(--text-muted)" }}>Theme is applied instantly and saved across sessions.</p>
+            </div>
+
+            {/* HR Config (admin only) */}
+            {user?.role === "admin" && (
+              <div className="card p-6 animate-fade-up delay-200">
+                <SectionHeader icon={Briefcase} label="HR Portal Configuration" color="var(--accent-amber)" />
+                <p className="text-xs mb-4" style={{ color: "var(--text-secondary)" }}>
+                  Set the shared password HR staff use at <code style={{ fontFamily: "'DM Mono'", color: "var(--accent-cyan)", background: "var(--bg-surface)", padding: "1px 5px", borderRadius: "4px" }}>/hr-login</code>. They enter their name + this password.
+                </p>
+                <div className="relative mb-3">
+                  <Lock size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--text-muted)" }} />
+                  <input type={showHrPass ? "text" : "password"} value={hrPassword} onChange={(e) => setHrPasswordState(e.target.value)}
+                    className="input-field pl-9 pr-10 w-full" placeholder="HR portal password" />
+                  <button type="button" onClick={() => setShowHrPass(!showHrPass)} className="absolute right-3 top-1/2 -translate-y-1/2" style={{ color: "var(--text-muted)" }}>
+                    {showHrPass ? <EyeOff size={14} /> : <Eye size={14} />}
+                  </button>
+                </div>
+                <button onClick={handleHrPassSave} className="btn-primary flex items-center gap-2 text-sm"
+                  style={{ background: "var(--accent-amber)", color: "#1a1000", padding: "9px 18px" }}>
+                  {hrPassSaved ? <CheckCircle2 size={14} /> : <Save size={14} />}
+                  {hrPassSaved ? "Password Saved!" : "Update HR Password"}
+                </button>
+                <p className="text-[11px] mt-2" style={{ color: "var(--text-muted)" }}>
+                  Default: <code style={{ fontFamily: "'DM Mono'", color: "var(--accent-amber)" }}>hr2024</code>. Change after first setup.
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Right column */}
+          <div className="space-y-5">
+            <div className="card p-5 animate-fade-up delay-100">
+              <SectionHeader icon={Calendar} label="Account Details" color="var(--accent-green)" />
+              <div className="space-y-3">
+                <DetailRow label="Member since" value={joinedDate} />
+                <DetailRow label="Account status" value={user?.is_active ? "Active" : "Inactive"} valueColor={user?.is_active ? "var(--accent-green)" : "var(--accent-red)"} />
+                <DetailRow label="User ID" value={user?.id?.slice(0, 8) + "…" || "—"} mono />
+              </div>
+            </div>
+
+            <div className="card p-5 animate-fade-up delay-200">
+              <SectionHeader icon={Lock} label="Security" color="var(--accent-cyan)" />
+              <div className="space-y-2">
+                {[
+                  { label: "Change Password", desc: "Update your login password" },
+                  { label: "Two-Factor Auth", desc: "Add an extra layer of security" },
+                  { label: "Active Sessions", desc: "Manage where you're logged in" },
+                ].map((item) => (
+                  <button key={item.label} className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg hover:bg-white/5 transition-all text-left" style={{ border: "1px solid var(--border)" }}>
+                    <div>
+                      <div className="text-xs font-semibold" style={{ fontFamily: "'Syne', sans-serif", color: "var(--text-primary)" }}>{item.label}</div>
+                      <div className="text-[11px]" style={{ color: "var(--text-muted)" }}>{item.desc}</div>
+                    </div>
+                    <ChevronRight size={13} style={{ color: "var(--text-muted)", flexShrink: 0 }} />
+                  </button>
+                ))}
+              </div>
+              <p className="text-[11px] mt-3" style={{ color: "var(--text-muted)" }}>Security features coming soon.</p>
+            </div>
+
+            <div className="rounded-xl p-5 animate-fade-up delay-300" style={{ background: "rgba(239,68,68,0.04)", border: "1px solid rgba(239,68,68,0.2)" }}>
+              <div className="text-sm font-bold mb-1" style={{ fontFamily: "'Syne', sans-serif", color: "var(--accent-red)" }}>Danger Zone</div>
+              <p className="text-[11px] mb-3" style={{ color: "var(--text-muted)" }}>Permanently delete your account and all data.</p>
+              <button className="text-xs px-3 py-2 rounded-lg font-semibold w-full" style={{ fontFamily: "'Syne', sans-serif", background: "rgba(239,68,68,0.08)", color: "var(--accent-red)", border: "1px solid rgba(239,68,68,0.3)" }}>
+                Delete Account
+              </button>
             </div>
           </div>
         </div>
@@ -379,5 +333,3 @@ export default function SettingsPage() {
     </div>
   );
 }
-
-

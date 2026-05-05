@@ -7,18 +7,6 @@ import { useVoiceInput } from "../hooks/useVoiceInput";
 import { roles as rolesApi, interview as interviewApi, Role, QuestionResponse, getUser } from "../../lib/api";
 import { Mic2, ChevronRight, Clock, Send, Lightbulb, AlertCircle, CheckCircle2, Play, X, Loader2 } from "lucide-react";
 
-// Parse MCQ data from question text
-function parseMCQ(text: string): { question: string; choices: string[] } | null {
-  if (!text.startsWith("__MCQ__")) return null;
-  try {
-    const endIdx = text.indexOf("__END__");
-    const choicesStr = text.slice(7, endIdx);
-    const question = text.slice(endIdx + 7);
-    const choices = JSON.parse(choicesStr);
-    return { question, choices };
-  } catch { return null; }
-}
-
 const difficultyColors: Record<string, string> = {
   easy: "var(--accent-green)",
   medium: "var(--accent-amber)",
@@ -106,7 +94,7 @@ export default function InterviewPage() {
       startTimeRef.current = Date.now();
       setStage("active");
     } catch (e: any) {
-      setApiError(typeof e === "string" ? e : (e as any)?.detail || (e as any)?.message || "An error occurred");
+      setApiError(e.message);
       setStage("setup");
     }
   };
@@ -141,19 +129,18 @@ export default function InterviewPage() {
       startTimeRef.current = Date.now();
       setStage("active");
     } catch (e: any) {
-      setApiError(typeof e === "string" ? e : (e as any)?.detail || (e as any)?.message || "An error occurred");
+      setApiError(e.message);
       setStage("active");
     }
   };
 
   const charCount = answer.length;
-  const mcqActive = currentQ ? currentQ.question_text.startsWith("__MCQ__") : false;
-  const minChars = mcqActive ? 1 : 30;
+  const minChars = 50;
 
   return (
     <div className="min-h-screen" style={{ background: "var(--bg-deep)" }}>
       <Sidebar />
-      <main className="ml-[220px] p-8">
+      <main className="lg:ml-[220px] pt-16 lg:pt-0 p-4 sm:p-6 lg:p-8">
 
         {/* ── SETUP ── */}
         {(stage === "setup" || (stage === "submitting" && !interviewId)) && (
@@ -178,7 +165,7 @@ export default function InterviewPage() {
                   <Loader2 size={18} className="animate-spin" /> Loading roles...
                 </div>
               ) : (
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {roleList.map((r) => (
                     <button key={r.id} onClick={() => setSelectedRole(r.id)}
                       className="card p-4 text-left transition-all hover:-translate-y-0.5"
@@ -203,7 +190,7 @@ export default function InterviewPage() {
             <div className="card p-5 mb-6">
               <h2 className="text-sm font-bold mb-3" style={{ fontFamily: "'Syne', sans-serif", color: "var(--text-secondary)" }}>Number of Questions</h2>
               {/* Quick presets */}
-              <div className="flex gap-2 mb-4">
+              <div className="flex flex-wrap gap-2 mb-4">
                 {[5, 10, 25, 50, 100].map((n) => (
                   <button key={n} onClick={() => { setTotalQuestions(n); setCustomQInput(String(n)); }}
                     className="w-12 h-9 rounded-lg text-sm font-bold transition-all"
@@ -295,105 +282,56 @@ export default function InterviewPage() {
             )}
 
             {/* Question */}
-            {(() => {
-              const mcq = parseMCQ(currentQ.question_text);
-              const isCoding = currentQ.question_type === "coding";
-              const displayText = mcq ? mcq.question : currentQ.question_text;
-              return (
-                <>
-                  <div className="rounded-xl p-6 mb-5" style={{ background: "var(--bg-card)", border: "1px solid var(--border-bright)", boxShadow: "var(--glow-cyan)" }}>
-                    <div className="flex items-start gap-3">
-                      <div className="w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0 mt-0.5 text-xs font-bold" style={{ background: "rgba(0,212,255,0.12)", color: "var(--accent-cyan)", fontFamily: "'Syne', sans-serif" }}>
-                        Q{questionNumber}
-                      </div>
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className="badge" style={{
-                            background: mcq ? "rgba(168,85,247,0.12)" : isCoding ? "rgba(245,158,11,0.12)" : "rgba(0,212,255,0.1)",
-                            color: mcq ? "#a855f7" : isCoding ? "var(--accent-amber)" : "var(--accent-cyan)"
-                          }}>
-                            {mcq ? "MCQ" : isCoding ? "Coding" : currentQ.question_type}
-                          </span>
-                        </div>
-                        <p className="text-base leading-relaxed whitespace-pre-line" style={{ color: "var(--text-primary)" }}>{displayText}</p>
-                      </div>
-                    </div>
+            <div className="rounded-xl p-6 mb-5" style={{ background: "var(--bg-card)", border: "1px solid var(--border-bright)", boxShadow: "var(--glow-cyan)" }}>
+              <div className="flex items-start gap-3">
+                <div className="w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0 mt-0.5 text-xs font-bold" style={{ background: "rgba(0,212,255,0.12)", color: "var(--accent-cyan)", fontFamily: "'Syne', sans-serif" }}>
+                  Q{questionNumber}
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="badge" style={{ background: "rgba(0,212,255,0.1)", color: "var(--accent-cyan)" }}>{currentQ.question_type}</span>
                   </div>
+                  <p className="text-base leading-relaxed" style={{ color: "var(--text-primary)" }}>{currentQ.question_text}</p>
+                </div>
+              </div>
+            </div>
 
-                  {/* MCQ Choices */}
-                  {mcq && (
-                    <div className="mb-5 space-y-2">
-                      <label className="text-xs font-semibold tracking-wide" style={{ fontFamily: "'Syne', sans-serif", color: "var(--text-secondary)" }}>
-                        Select your answer:
-                      </label>
-                      {mcq.choices.map((choice, i) => (
-                        <button
-                          key={i}
-                          onClick={() => setAnswer(choice)}
-                          className="w-full text-left px-4 py-3 rounded-xl text-sm transition-all"
-                          style={{
-                            background: answer === choice ? "rgba(0,212,255,0.12)" : "var(--bg-card)",
-                            border: answer === choice ? "1px solid var(--accent-cyan)" : "1px solid var(--border)",
-                            color: answer === choice ? "var(--accent-cyan)" : "var(--text-primary)",
-                            fontFamily: "'Syne', sans-serif",
-                          }}
-                          disabled={stage === "submitting"}
-                        >
-                          <span className="font-bold mr-2">{["A", "B", "C", "D"][i]}.</span> {choice}
-                        </button>
-                      ))}
-                    </div>
-                  )}
+            {/* Hint */}
+            <div className="mb-4">
+              <button onClick={() => setHintOpen(!hintOpen)} className="flex items-center gap-1.5 text-xs transition-colors" style={{ color: hintOpen ? "var(--accent-amber)" : "var(--text-muted)" }}>
+                <Lightbulb size={13} />{hintOpen ? "Hide hint" : "Show hint"}
+              </button>
+              {hintOpen && (
+                <div className="mt-2 p-3 rounded-lg text-xs leading-relaxed animate-fade-in" style={{ background: "rgba(245,158,11,0.06)", border: "1px solid rgba(245,158,11,0.2)", color: "var(--text-secondary)" }}>
+                  💡 Take a moment to structure your answer — consider using examples from your experience and explaining your reasoning clearly.
+                </div>
+              )}
+            </div>
 
-                  {/* Hint */}
-                  {!mcq && (
-                    <div className="mb-4">
-                      <button onClick={() => setHintOpen(!hintOpen)} className="flex items-center gap-1.5 text-xs transition-colors" style={{ color: hintOpen ? "var(--accent-amber)" : "var(--text-muted)" }}>
-                        <Lightbulb size={13} />{hintOpen ? "Hide hint" : "Show hint"}
-                      </button>
-                      {hintOpen && (
-                        <div className="mt-2 p-3 rounded-lg text-xs leading-relaxed" style={{ background: "rgba(245,158,11,0.06)", border: "1px solid rgba(245,158,11,0.2)", color: "var(--text-secondary)" }}>
-                          {isCoding ? "💡 Write clean, working code. Comments are welcome!" : "💡 Structure your answer with examples from your experience."}
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Answer area - hidden for MCQ (handled by choices above) */}
-                  {!mcq && (
-                    <div className="mb-4">
-                      <div className="flex items-center justify-between mb-2">
-                        <label className="block text-xs font-semibold tracking-wide" style={{ fontFamily: "'Syne', sans-serif", color: "var(--text-secondary)" }}>
-                          {isCoding ? "Your Code" : "Your Answer"}
-                        </label>
-                        {!isCoding && <VoiceMicButton status={voiceStatus} onToggle={toggleVoice} supported={voiceSupported} />}
-                      </div>
-                      <textarea
-                        className="input-field resize-none"
-                        rows={isCoding ? 10 : 8}
-                        placeholder={isCoding ? "// Write your code here..." : "Type your answer here or click Voice to speak..."}
-                        value={answer}
-                        onChange={(e) => setAnswer(e.target.value)}
-                        style={{
-                          minHeight: isCoding ? "240px" : "200px",
-                          fontFamily: isCoding ? "'Courier New', monospace" : "inherit",
-                          fontSize: isCoding ? "13px" : "inherit",
-                        }}
-                        disabled={stage === "submitting"}
-                      />
-                      {voiceError && <p className="text-xs mt-1" style={{ color: "var(--accent-red)" }}>⚠️ {voiceError}</p>}
-                      <div className="flex items-center justify-between mt-2">
-                        <div className="flex items-center gap-1.5 text-xs" style={{ color: charCount >= minChars ? "var(--accent-green)" : "var(--text-muted)" }}>
-                          {charCount >= minChars ? <CheckCircle2 size={12} /> : <AlertCircle size={12} />}
-                          {charCount < minChars ? `${minChars - charCount} more chars` : "Good!"}
-                        </div>
-                        <span className="text-xs" style={{ color: "var(--text-muted)" }}>{charCount}</span>
-                      </div>
-                    </div>
-                  )}
-                </>
-              );
-            })()}
+            {/* Answer textarea */}
+            <div className="mb-4">
+              <div className="flex items-center justify-between mb-2">
+                <label className="block text-xs font-semibold tracking-wide" style={{ fontFamily: "'Syne', sans-serif", color: "var(--text-secondary)" }}>Your Answer</label>
+                <VoiceMicButton status={voiceStatus} onToggle={toggleVoice} supported={voiceSupported} />
+              </div>
+              <textarea
+                className="input-field resize-none"
+                rows={8}
+                placeholder="Type your answer here or click Voice to speak..."
+                value={answer}
+                onChange={(e) => setAnswer(e.target.value)}
+                style={{ minHeight: "200px" }}
+                disabled={stage === "submitting"}
+              />
+              {voiceError && <p className="text-xs mt-1" style={{ color: "var(--accent-red)" }}>⚠️ {voiceError}</p>}
+              <div className="flex items-center justify-between mt-2">
+                <div className="flex items-center gap-1.5 text-xs" style={{ color: charCount >= minChars ? "var(--accent-green)" : "var(--text-muted)" }}>
+                  {charCount >= minChars ? <CheckCircle2 size={12} /> : <AlertCircle size={12} />}
+                  {charCount < minChars ? `${minChars - charCount} more chars for a complete answer` : "Good length!"}
+                </div>
+                <span className="text-xs" style={{ color: "var(--text-muted)" }}>{charCount} / 5000</span>
+              </div>
+            </div>
 
             <div className="flex items-center justify-between">
               <button onClick={() => setAnswer("")} className="btn-ghost text-sm flex items-center gap-2" style={{ padding: "10px 20px" }}>Clear</button>

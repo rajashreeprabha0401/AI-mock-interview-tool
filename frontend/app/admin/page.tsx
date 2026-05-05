@@ -191,7 +191,7 @@ export default function AdminPage() {
   return (
     <div className="min-h-screen" style={{ background: "var(--bg-deep)" }}>
       <Sidebar />
-      <main className="ml-[220px] p-8">
+      <main className="lg:ml-[220px] pt-16 lg:pt-0 p-4 sm:p-6 lg:p-8">
         {/* Header */}
         <div className="flex items-start justify-between mb-8 animate-fade-up">
           <div>
@@ -218,7 +218,7 @@ export default function AdminPage() {
         )}
 
         {/* Stats grid */}
-        <div className="grid grid-cols-4 gap-4 mb-8 animate-fade-up delay-100">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8 animate-fade-up delay-100">
           {[
             { label: "Total Users", sub: stats ? `${stats.active_users} active` : "—", val: stats?.total_users ?? 0, icon: Users, color: "var(--accent-cyan)", spark: [12, 18, 14, 22, 19, 25, stats?.total_users ?? 0] },
             { label: "Total Interviews", sub: stats ? `${stats.completed_interviews} completed` : "—", val: stats?.total_interviews ?? 0, icon: Mic2, color: "#a78bfa", spark: [5, 9, 7, 11, 8, 14, stats?.total_interviews ?? 0] },
@@ -255,7 +255,7 @@ export default function AdminPage() {
         {/* ── Overview Tab ── */}
         {activeTab === "overview" && (
           <div className="animate-fade-in space-y-6">
-            <div className="grid grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
               <div className="card p-6">
                 <div className="flex items-center gap-2 mb-5">
                   <Award size={15} style={{ color: "var(--accent-cyan)" }} />
